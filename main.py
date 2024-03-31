@@ -1,0 +1,3 @@
+from calcMaier import *
+
+print()
