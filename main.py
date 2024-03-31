@@ -1,3 +1,5 @@
+import calcMaier
 from calcMaier import *
 
-print()
+print(calcMaier.CalculatorMaier(2,3))
+print("hello")
