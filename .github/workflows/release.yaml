@@ -24,13 +24,15 @@ jobs:
   publish:
     needs: extract_info
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # ❗️Wichtig für Trusted Publishing
     env:
       PACKAGE_NAME: ${{ needs.extract_info.outputs.package_name }}
       VERSION: ${{ needs.extract_info.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # wichtig für Tags und Release-Referenzen
+          fetch-depth: 0  # wichtig für Tag-Zugriff
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -44,7 +46,7 @@ jobs:
         run: |
           if [ ! -f README.md ]; then
             echo "# ${{ env.PACKAGE_NAME }}" > README.md
-            echo "This is an auto-generated package." >> README.md
+            echo "Auto-generated package description." >> README.md
           fi
 
       - name: Ensure required packages exist
@@ -96,6 +98,3 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages_dir: dist/
-          verbose: true
