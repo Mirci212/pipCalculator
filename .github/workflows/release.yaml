@@ -15,11 +15,9 @@ jobs:
       - name: Extract package name and version
         id: extract
         run: |
-          # Extrahiere nur den Repository-Namen (ohne Owner)
           PACKAGE_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
           echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
           
-          # Extrahiere Version aus Tag (entfernt 'v' prefix)
           VERSION="${GITHUB_REF#refs/tags/v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -40,10 +38,39 @@ jobs:
       - name: Install build tools
         run: pip install setuptools wheel build
 
-      - name: Update version in pyproject.toml
+      - name: Generate pyproject.toml
         run: |
-          sed -i "s/^version = .*/version = \"${{ env.VERSION }}\"/" pyproject.toml
-          echo "Updated version to ${{ env.VERSION }}"
+          cat > pyproject.toml <<EOF
+          [build-system]
+          requires = ["setuptools>=42", "wheel"]
+          build-backend = "setuptools.build_meta"
+
+          [project]
+          name = "${{ env.PACKAGE_NAME }}"
+          version = "${{ env.VERSION }}"
+          description = "Auto-generated Python package"
+          readme = "README.md"
+          requires-python = ">=3.7"
+          license = { text = "MIT" }
+          authors = [
+            { name = "Auto Publisher", email = "no-reply@example.com" }
+          ]
+          classifiers = [
+            "Programming Language :: Python :: 3",
+            "License :: OSI Approved :: MIT License",
+            "Operating System :: OS Independent"
+          ]
+
+          [project.urls]
+          Homepage = "https://github.com/${{ github.repository }}"
+          EOF
+
+      - name: Ensure README exists
+        run: |
+          if [ ! -f README.md ]; then
+            echo "# ${{ env.PACKAGE_NAME }}" > README.md
+            echo "This is an auto-generated package." >> README.md
+          fi
 
       - name: Build package
         run: python -m build
