@@ -17,7 +17,7 @@ jobs:
         run: |
           PACKAGE_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
           echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
-          
+
           VERSION="${GITHUB_REF#refs/tags/v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -29,6 +29,8 @@ jobs:
       VERSION: ${{ needs.extract_info.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # wichtig für Tags und Release-Referenzen
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,6 +39,25 @@ jobs:
 
       - name: Install build tools
         run: pip install setuptools wheel build
+
+      - name: Ensure README exists
+        run: |
+          if [ ! -f README.md ]; then
+            echo "# ${{ env.PACKAGE_NAME }}" > README.md
+            echo "This is an auto-generated package." >> README.md
+          fi
+
+      - name: Ensure required packages exist
+        run: |
+          for pkg in CalcMaier Foods; do
+            if [ ! -d "$pkg" ]; then
+              echo "Missing $pkg folder. Creating dummy package."
+              mkdir -p "$pkg"
+              echo "# Dummy package" > "$pkg/__init__.py"
+            elif [ ! -f "$pkg/__init__.py" ]; then
+              echo "# Package marker" > "$pkg/__init__.py"
+            fi
+          done
 
       - name: Generate pyproject.toml
         run: |
@@ -66,13 +87,6 @@ jobs:
           [tool.setuptools]
           packages = ["CalcMaier", "Foods"]
           EOF
-
-      - name: Ensure README exists
-        run: |
-          if [ ! -f README.md ]; then
-            echo "# ${{ env.PACKAGE_NAME }}" > README.md
-            echo "This is an auto-generated package." >> README.md
-          fi
 
       - name: Build package
         run: python -m build
