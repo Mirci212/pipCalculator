@@ -1,74 +1,58 @@
-name: Publish to PyPI and GitHub Release
+name: Publish to PyPI on Release
 
 on:
   release:
-    types: [published]  # Triggers when a release is published (not just created)
+    types: [published]
   workflow_dispatch:
 
-env:
-  PACKAGE_NAME: ${{ github.repository.split('/')[1] }}
-
 jobs:
-  extract_version:
+  extract_info:
     runs-on: ubuntu-latest
     outputs:
+      package_name: ${{ steps.extract.outputs.package_name }}
       version: ${{ steps.extract.outputs.version }}
     steps:
-      - name: Extract version from tag
+      - name: Extract package name and version
         id: extract
         run: |
-          # Remove 'v' prefix from tag (e.g., v1.0.0 → 1.0.0)
+          # Extrahiere nur den Repository-Namen (ohne Owner)
+          PACKAGE_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
+          
+          # Extrahiere Version aus Tag (entfernt 'v' prefix)
           VERSION="${GITHUB_REF#refs/tags/v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-  build_and_publish:
-    needs: extract_version
+  publish:
+    needs: extract_info
     runs-on: ubuntu-latest
+    env:
+      PACKAGE_NAME: ${{ needs.extract_info.outputs.package_name }}
+      VERSION: ${{ needs.extract_info.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.x"
 
       - name: Install build tools
-        run: pip install setuptools wheel poetry
+        run: pip install setuptools wheel build
 
-      - name: Set version with Poetry
-        run: poetry version ${{ needs.extract_version.outputs.version }}
+      - name: Update version in pyproject.toml
+        run: |
+          sed -i "s/^version = .*/version = \"${{ env.VERSION }}\"/" pyproject.toml
+          echo "Updated version to ${{ env.VERSION }}"
 
-      - name: Build distributions
-        run: poetry build
+      - name: Build package
+        run: python -m build
 
-      - name: Upload artifacts (for GitHub Release)
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/*
+      - name: Verify distributions
+        run: ls -l dist/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages_dir: dist/
           verbose: true
-
-  create_github_release:
-    needs: [extract_version, build_and_publish]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ needs.extract_version.outputs.version }}
-          name: "v${{ needs.extract_version.outputs.version }}"
-          body: "Automated release for version ${{ needs.extract_version.outputs.version }}"
-          files: dist/*
